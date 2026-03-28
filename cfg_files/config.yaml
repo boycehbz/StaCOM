@@ -1,0 +1,51 @@
+# # experiment name
+# note: test
+
+# #project basic
+# task: hoi  # 
+
+# #model basic
+# gpu_index: 0
+# lr: 0.0001
+# batchsize: 10
+# frame_length: 16
+# epoch: 2000
+# worker: 6
+# use_sch: True
+# model_type: smplx
+
+# #********dataset*********#
+# # The path for datasets and annotations
+# data_folder: /your_dataset_path
+# output: output
+
+# # CORE4D_real CORE4D_syn
+# trainset: CORE4D_syn CORE4D_real
+# # CORE4D_S1 CORE4D_S2
+# testset: CORE4D_S1
+
+# # cliff hmr cliff_hmr pose_transformer_v8  relation relation_v8
+# model: interhuman_diffusion_flow
+# use_prior: False
+
+# mode: train # train/test/eval
+
+# # AMP adversarial training data source
+# amp_use_pretrained: False
+# amp_discriminator_ckpt: output/train/flow_amp_BPS/amp_checkpoints/amp_discriminator_epoch45.pth
+
+# interact_amp_use_pretrained: False
+# interact_amp_discriminator_ckpt:
+
+# # Use pretrain model and the corresponding path
+# pretrain: False
+# pretrain_dir: output/diffusion_flow_train/08.22-12h46m28s/trained_model/hoi_epoch001.pkl
+
+# # The name of your training loss function
+# # Split different names with a single space
+# # e.g., KL_Loss MPJPE L1 L2
+# train_loss: L1  Flow_Loss Single_AMP_Loss Interact_AMP_Loss # L1 Flow_Loss SMPL_Loss Keyp_Loss Mesh_Loss Joint_Loss Joint_reg_Loss Skeleton_Loss Plane_Loss Pen_Loss 
+# test_loss: ContactDetection IDFAccuracy Penetration # ContactDetection IDFAccuracy Penetration
+
+# #visualize
+# viz: False
