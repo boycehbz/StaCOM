@@ -5,7 +5,7 @@ Official codebase for CVPR 2026 paper **"Stability-Driven Motion Generation for 
 **[Jiahao Xu](https://openreview.net/profile?id=~Jiahao_Xu9)**, **[Xiaohan Yuan](https://yuan-xiaohan.github.io/)**, **[Xingchen Wu](https://openreview.net/profile?id=~Xingchen_Wu1)**, **[Chongyang Xu](https://github.com/Wil909)**, **[Kun Li](https://cic.tju.edu.cn/faculty/likun/)**, **[Buzhen Huang](https://www.buzhenhuang.com/)**  
 Tianjin University, National University of Singapore, Sichuan University
 
-[Project](#) · [Paper](#)
+[Project](http://www.buzhenhuang.com/works/StaCOM.html) · [Paper](http://www.buzhenhuang.com/publications/papers/Xu_CVPR2026.pdf)
 
 ![figure](/assets/teaser.png)
 <p align="center">
