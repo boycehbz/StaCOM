@@ -42,6 +42,27 @@ Download the official **SMPL-X** model from the [SMPL-X website](https://smpl-x.
 
 ## Demo
 
+Demo assets (checkpoints + SMPL-X neutral model) are provided here:
+
+- Google Drive: https://drive.google.com/drive/folders/17oLiCvTHiHTnGxfUHlmu687rCeGwu4Rk?usp=drive_link
+
+Download and place the files as follows:
+
+- `contact_epoch200.pkl` -> `output/contact_epoch200.pkl`
+- `hoi_epoch200.pkl` -> `output/hoi_epoch200.pkl`
+- `SMPLX_NEUTRAL.pkl` -> `data/SMPLX_NEUTRAL.pkl`
+
+Recommended folder structure:
+
+```text
+StaCOM/
+├── data/
+│   └── SMPLX_NEUTRAL.pkl
+└── output/
+    ├── contact_epoch200.pkl
+    └── hoi_epoch200.pkl
+```
+
 ### Input format
 
 Three files are required:
@@ -55,14 +76,23 @@ Three files are required:
 Run the motion generation demo with a trained checkpoint:
 
 ```bash
-python demo.py \
+xvfb-run -a -s "-screen 0 1024x768x24" python demo.py \
     --obj-mesh     data/test/01/box001.obj \
     --obj-traj     data/test/01/trajectory.npy \
     --affordance   data/test/01/affordance.npz \
     --contact-ckpt output/contact_epoch200.pkl \
     --motion-ckpt  output/hoi_epoch200.pkl \
-    --body-model   data/smplx/SMPLX_NEUTRAL.pkl \
+    --body-model   data/SMPLX_NEUTRAL.pkl \
     --output-dir   output/
+```
+
+`xvfb-run` starts a virtual X display for headless/offscreen rendering on servers without a desktop session (common for remote Linux machines).
+
+Install it with:
+
+```bash
+# Ubuntu / Debian
+sudo apt-get update && sudo apt-get install -y xvfb
 ```
 
 The output video is saved to `output/res_20260325_143022.mp4`.
