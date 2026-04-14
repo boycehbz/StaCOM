@@ -55,8 +55,8 @@ Three files are required:
 Run the motion generation demo with a trained checkpoint:
 
 ```bash
-python run_demo.py \
-    --obj-mesh     data/test/01/bucket003.obj \
+python demo.py \
+    --obj-mesh     data/test/01/box001.obj \
     --obj-traj     data/test/01/trajectory.npy \
     --affordance   data/test/01/affordance.npz \
     --contact-ckpt output/contact_epoch200.pkl \

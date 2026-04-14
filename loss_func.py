@@ -1,6 +1,5 @@
 import sys
 sys.path.append('../IsaacGymEnvs')
-from amp_discriminator import AMPTrainer
 import torch.nn as nn
 import torch
 import numpy as np
