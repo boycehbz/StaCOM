@@ -5,7 +5,7 @@ Official codebase for CVPR 2026 paper **"Stability-Driven Motion Generation for 
 **[Jiahao Xu](https://openreview.net/profile?id=~Jiahao_Xu9)**, **[Xiaohan Yuan](https://yuan-xiaohan.github.io/)**, **[Xingchen Wu](https://openreview.net/profile?id=~Xingchen_Wu1)**, **[Chongyang Xu](https://github.com/Wil909)**, **[Kun Li](https://cic.tju.edu.cn/faculty/likun/)**, **[Buzhen Huang](https://www.buzhenhuang.com/)**  
 Tianjin University, National University of Singapore, Sichuan University
 
-[Project](http://www.buzhenhuang.com/works/StaCOM.html) · [Paper](http://www.buzhenhuang.com/publications/papers/Xu_CVPR2026.pdf)
+[Project](http://www.buzhenhuang.com/works/StaCOM.html) · [Paper](https://openaccess.thecvf.com/content/CVPR2026/papers/Xu_Stability-Driven_Motion_Generation_for_Object-Guided_Human-Human_Co-Manipulation_CVPR_2026_paper.pdf) · [Arxiv](https://arxiv.org/abs/2604.20336)
 
 ![figure](/assets/teaser.png)
 <p align="center">
@@ -37,30 +37,23 @@ Install other dependencies:
 pip install -r requirements.txt
 ```
 
-Download the official **SMPL-X** model from the [SMPL-X website](https://smpl-x.is.tue.mpg.de/) and place it in ```data/smplx/```.
+Download the official **SMPL-X** model from the [SMPL-X website](https://smpl-x.is.tue.mpg.de/) and place it in ```data/SMPLX_NEUTRAL.pkl```.
 
 
 ## Demo
 
-Demo assets (checkpoints + SMPL-X neutral model) are provided here:
+Demo assets (checkpoints) are provided here:
 
-- Google Drive: https://drive.google.com/drive/folders/17oLiCvTHiHTnGxfUHlmu687rCeGwu4Rk?usp=drive_link
+- [Google Drive](https://drive.google.com/drive/folders/17oLiCvTHiHTnGxfUHlmu687rCeGwu4Rk?usp=drive_link)
 
 Download and place the files as follows:
-
-- `contact_epoch200.pkl` -> `output/contact_epoch200.pkl`
-- `hoi_epoch200.pkl` -> `output/hoi_epoch200.pkl`
-- `SMPLX_NEUTRAL.pkl` -> `data/SMPLX_NEUTRAL.pkl`
-
-Recommended folder structure:
 
 ```text
 StaCOM/
 ├── data/
-│   └── SMPLX_NEUTRAL.pkl
-└── output/
+    ├── SMPLX_NEUTRAL.pkl
     ├── contact_epoch200.pkl
-    └── hoi_epoch200.pkl
+    └── hoi_epoch020.pkl
 ```
 
 ### Input format
@@ -76,24 +69,24 @@ Three files are required:
 Run the motion generation demo with a trained checkpoint:
 
 ```bash
-xvfb-run -a -s "-screen 0 1024x768x24" python demo.py \
+ python demo.py \
     --obj-mesh     data/test/01/box001.obj \
     --obj-traj     data/test/01/trajectory.npy \
     --affordance   data/test/01/affordance.npz \
-    --contact-ckpt output/contact_epoch200.pkl \
-    --motion-ckpt  output/hoi_epoch200.pkl \
+    --contact-ckpt data/contact_epoch200.pkl \
+    --motion-ckpt  data/hoi_epoch200.pkl \
     --body-model   data/SMPLX_NEUTRAL.pkl \
     --output-dir   output/
 ```
 
-`xvfb-run` starts a virtual X display for headless/offscreen rendering on servers without a desktop session (common for remote Linux machines).
+<!-- `xvfb-run` starts a virtual X display for headless/offscreen rendering on servers without a desktop session (common for remote Linux machines).
 
 Install it with:
 
 ```bash
 # Ubuntu / Debian
 sudo apt-get update && sudo apt-get install -y xvfb
-```
+``` -->
 
 The output video is saved to `output/res_20260325_143022.mp4`.
 

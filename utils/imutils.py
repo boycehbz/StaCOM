@@ -1,12 +1,213 @@
 """
 This file contains functions that are used to perform data augmentation.
 """
+import os
+
 import torch
 import numpy as np
 import scipy.misc
 import cv2
 
 import constants
+
+
+# Defaults used by the end-to-end contact/motion generation helpers below.
+DEMO_FRAME_LENGTH = 128
+DEMO_NUM_AGENTS = 2
+DEMO_IMAGE_HEIGHT = 1080
+DEMO_IMAGE_WIDTH = 1920
+
+
+def load_trajectory(path):
+    """Load an object trajectory and return it as a ``(T, 4, 4)`` array."""
+    print(f"Loading object trajectory: {path}")
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".npz":
+        with np.load(path, allow_pickle=False) as data:
+            key = "obj_pose" if "obj_pose" in data else list(data.keys())[0]
+            if key != "obj_pose":
+                print(f"Using key '{key}' from npz")
+            trajectory = data[key]
+    else:
+        trajectory = np.load(path, allow_pickle=False)
+
+    trajectory = trajectory.astype(np.float32)
+    if trajectory.ndim == 2 and trajectory.shape[1] == 16:
+        trajectory = trajectory.reshape(-1, 4, 4)
+    if trajectory.ndim != 3 or trajectory.shape[1:] != (4, 4):
+        raise ValueError(f"Trajectory must be (T,4,4), got {trajectory.shape}")
+    print(f"Trajectory shape: {trajectory.shape}")
+    return trajectory
+
+
+def load_affordance(path):
+    """Load the ``sampled_scores`` array from an affordance NPZ file."""
+    print(f"Loading affordance: {path}")
+    with np.load(path, allow_pickle=False) as data:
+        if "sampled_scores" not in data:
+            raise ValueError(
+                "affordance npz must contain 'sampled_scores', "
+                f"found keys: {list(data.keys())}"
+            )
+        scores = data["sampled_scores"].astype(np.float32)
+    print(f"Affordance scores shape: {scores.shape}")
+    return scores
+
+
+def build_contact_condition(mesh, obj_traj, affordance_scores):
+    """Build object-pose, point and BPS inputs for the contact model."""
+    import trimesh
+    from tqdm import tqdm
+
+    print("Building contact model condition (BPS, obj_points) ...")
+    num_frames = obj_traj.shape[0]
+    num_points = int(affordance_scores.shape[0])
+
+    # Use the face indices returned for the sampled points so normals and points
+    # correspond to one another.
+    np.random.seed(42)
+    sampled_points, face_indices = trimesh.sample.sample_surface(mesh, num_points)
+    sampled_points = sampled_points.astype(np.float32)
+    face_normals = mesh.face_normals[face_indices].astype(np.float32)
+
+    rng = np.random.default_rng(42)
+    directions = rng.normal(size=(1024, 3))
+    directions /= np.maximum(np.linalg.norm(directions, axis=1, keepdims=True), 1e-8)
+    radii = rng.random(1024) ** (1.0 / 3.0)
+    bps_basis = (directions * radii[:, None]).astype(np.float32)
+
+    dense_points = mesh.sample(4096, return_index=False).astype(np.float32)
+    centered = dense_points - dense_points.mean(axis=0, keepdims=True)
+    max_norm = np.linalg.norm(centered, axis=1).max()
+    normalized = centered / (max_norm if max_norm >= 1e-6 else 1.0)
+    bps_vector = np.linalg.norm(
+        bps_basis[:, None, :] - normalized[None, :, :], axis=-1
+    ).min(axis=1).astype(np.float32)
+
+    obj_points = np.zeros((num_frames, num_points, 7), dtype=np.float32)
+    points_h = np.ones((num_points, 4), dtype=np.float32)
+    points_h[:, :3] = sampled_points
+    print(f"Computing world-space object points for {num_frames} frames ...")
+    for frame in tqdm(range(num_frames), desc="obj_points"):
+        world_points = (obj_traj[frame] @ points_h.T).T[:, :3]
+        obj_points[frame] = np.concatenate(
+            [world_points, face_normals, affordance_scores[:, None]], axis=1
+        )
+
+    obj_bps = np.repeat(bps_vector[None, :], num_frames, axis=0)
+    print(f"obj_points shape: {obj_points.shape}, obj_bps shape: {obj_bps.shape}")
+    return {"obj_pose": obj_traj, "obj_points": obj_points, "obj_bps": obj_bps}
+
+
+def run_contact_model(contact_ckpt, cond, device):
+    """Run contact-point inference for a prepared object condition."""
+    from model.contact_point_generator import contact_point_generator
+
+    print(f"Loading contact_point_generator from: {contact_ckpt}")
+    model = contact_point_generator(smpl=None)
+    checkpoint = torch.load(contact_ckpt, map_location=device)
+    state = checkpoint["model"] if "model" in checkpoint else checkpoint
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    print(f"contact model loaded. missing={len(missing)}, unexpected={len(unexpected)}")
+    model.to(device).eval()
+
+    print("Running contact_point_generator inference ...")
+    with torch.no_grad():
+        data = {
+            key: torch.from_numpy(cond[key]).unsqueeze(0).to(device)
+            for key in ("obj_bps", "obj_pose", "obj_points")
+        }
+        output = model(data)
+
+    points = output["pred_contact_points"].squeeze(0).detach().cpu().numpy().astype(np.float32)
+    valid = torch.sigmoid(output["pred_contact_logits"]).squeeze(0).detach().cpu().numpy().astype(np.float32)
+    print(f"Contact points shape: {points.shape}")
+    print(f"Contact valid shape:  {valid.shape}")
+    return points, valid
+
+
+def run_motion_model(
+    motion_ckpt, obj_traj, obj_mesh_path, contact_points, contact_valid,
+    gpu_index, device, use_physics=False, frame_length=DEMO_FRAME_LENGTH,
+    num_agents=DEMO_NUM_AGENTS,
+):
+    """Run motion generation and return data ready for rendering."""
+    from modules import ModelLoader
+    from utils.generated_tool import _build_batch
+
+    print("Building motion generation batch ...")
+    obj_mesh_path = os.path.abspath(obj_mesh_path)
+    batch = _build_batch(
+        obj_traj=obj_traj, num_agents=num_agents, frame_length=frame_length,
+        contact_points=contact_points, contact_valid=contact_valid,
+        device=device, obj_mesh_path=obj_mesh_path, dtype=torch.float32,
+    )
+    batch["obj_path"] = obj_mesh_path
+    workspace = os.path.join(os.path.dirname(motion_ckpt), "demo_workspace")
+    os.makedirs(workspace, exist_ok=True)
+    config = {
+        "mode": "test", "batchsize": 1, "worker": 0, "data_folder": "",
+        "model": "interhuman_flow_BPS_prior", "use_prior": 0,
+        "train_loss": "", "test_loss": "", "model_type": "smplx",
+        "gpu_index": gpu_index, "output": workspace, "lr": 1e-4,
+        "epoch": 0, "use_sch": 0, "pretrain": 0, "pretrain_dir": "",
+        "note": "", "viz": 0, "trainset": "", "testset": "",
+        "frame_length": frame_length, "amp_cmu_dir": "",
+        "amp_use_pretrained": 0, "amp_discriminator_ckpt": "",
+        "interact_amp_use_pretrained": 0,
+        "interact_amp_discriminator_ckpt": "",
+    }
+    print(f"Loading interhuman_flow_BPS_prior from: {motion_ckpt}")
+    loader = ModelLoader(dtype=torch.float32, device=device, out_dir=workspace, **config)
+    loader.load_checkpoint(motion_ckpt)
+    loader.model.use_cmaes_physics = use_physics
+    print(f"Physics simulation: {'ON' if use_physics else 'OFF'}")
+    loader.model.eval()
+    with torch.no_grad():
+        predictions = loader.model(batch)
+
+    batch_size, num_frames, agents = [int(value) for value in batch["data_shape"]]
+    pose = predictions["pred_pose"].reshape(batch_size, num_frames, agents, 72)
+    betas = batch["betas"].reshape(batch_size, num_frames, agents, -1)
+    translation = predictions["pred_cam_t"].reshape(batch_size, num_frames, agents, 3)
+    valid = batch["valid"].reshape(batch_size, num_frames, agents)
+    render_sample = {
+        "pose": pose[0].detach().cpu(),
+        "betas": torch.zeros_like(betas[0]).detach().cpu(),
+        "gt_cam_t": translation[0].detach().cpu(),
+        "valid": valid[0].detach().cpu(), "obj_path": obj_mesh_path,
+        "obj_pose": batch["obj_pose"][0].detach().cpu(),
+        "contact_points": batch["contact_points"][0].detach().cpu(),
+        "contact_valid": batch["contact_valid"][0].detach().cpu(),
+    }
+    return render_sample, loader
+
+
+def render_frames(
+    render_sample, body_model_path, output_dir, device,
+    image_size=(DEMO_IMAGE_HEIGHT, DEMO_IMAGE_WIDTH),
+):
+    """Render a generated motion sample and return its frame directory."""
+    from utils.generated_tool import (
+        AZIMUTH_DEG, DISTANCE_MARGIN, ELEVATION_DEG, FOV_DEG,
+        render_gt_single_view_frames,
+    )
+    from utils.smpl_torch_batch import SMPLXModel
+
+    print(f"Loading SMPLX body model from: {body_model_path}")
+    smpl = SMPLXModel(device=device, model_path=body_model_path, data_type=torch.float32)
+    frames_dir = os.path.join(output_dir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
+    saved_paths = render_gt_single_view_frames(
+        data=render_sample, smpl=smpl, output_dir=output_dir, frame_step=1,
+        image_size=image_size, fov_deg=FOV_DEG, elevation_deg=ELEVATION_DEG,
+        azimuth_deg=AZIMUTH_DEG, distance_margin=DISTANCE_MARGIN,
+        background_color=(255, 255, 255), render_people=True,
+        render_contact_points=False, contact_point_radius=0.0,
+        gallery_offset_per_frame=(310, 0), gallery_frame_indices=None,
+    )
+    print(f"Rendered {len(saved_paths)} frame files.")
+    return frames_dir
 
 def origin2crop(keypoints, crop_data):
     old_x = crop_data['old_x']

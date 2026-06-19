@@ -9,9 +9,19 @@ from modules import init, LossLoader, ModelLoader, DatasetLoader
 # os.environ["PYOPENGL_PLATFORM"] = "egl" #osmesa egl
 
 ###########Load config file in debug mode#########
-# import sys
+import sys
 # sys.argv = ['','--config=cfg_files/config.yaml'] 
 
+# sys.argv = [
+#     '',
+#     '--obj-mesh=data/test/01/box001.obj',
+#     '--obj-traj=data/test/01/trajectory.npy',
+#     '--affordance=data/test/01/affordance.npz',
+#     '--contact-ckpt=output/contact_epoch200.pkl',
+#     '--motion-ckpt=output/hoi_epoch200.pkl',
+#     '--body-model=data/SMPLX_NEUTRAL.pkl',
+#     '--output-dir=output/',
+# ]
 
 def main(**args):
     seed = 7
@@ -97,7 +107,6 @@ if __name__ == "__main__":
     args = parse_config()
 
     main(**args)
-
 
 
 

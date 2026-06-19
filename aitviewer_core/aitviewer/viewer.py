@@ -124,6 +124,11 @@ class Viewer(moderngl_window.WindowConfig):
         # Calculate window size
         size = int(size[0] * self.size_mult), int(size[1] * self.size_mult)
 
+        window_kwargs = {}
+        if self.window_type == "headless":
+            window_kwargs["backend"] = os.environ.get("AITVIEWER_HEADLESS_BACKEND", "egl")
+
+
         self.window = base_window_cls(
             title=title,
             size=size,
@@ -134,6 +139,7 @@ class Viewer(moderngl_window.WindowConfig):
             vsync=C.vsync,  # Set to False for some performance gains.
             samples=self.samples,
             cursor=True,
+            **window_kwargs,
         )
 
         self.window_size = size
